@@ -1,8 +1,15 @@
+from time import sleep
+
 from flask import Flask
+from sqlalchemy.exc import OperationalError
 
 from config import Config
 from controllers.deck_controller import deck_bp
+from controllers.view_controller import view_bp
 from extensions import db
+
+INIT_DB_MAX_ATTEMPTS = 5
+INIT_DB_RETRY_DELAY_SECONDS = 3
 
 
 def create_app(config_object: type[Config] | None = None, **config_overrides: object) -> Flask:
@@ -12,6 +19,7 @@ def create_app(config_object: type[Config] | None = None, **config_overrides: ob
 
     db.init_app(app)
     app.register_blueprint(deck_bp)
+    app.register_blueprint(view_bp)
 
     @app.get("/health")
     def health() -> tuple[dict[str, str], int]:
@@ -19,9 +27,22 @@ def create_app(config_object: type[Config] | None = None, **config_overrides: ob
 
     @app.cli.command("init-db")
     def init_db() -> None:
-        with app.app_context():
-            db.create_all()
-        print("Database tables created.")
+        for attempt in range(1, INIT_DB_MAX_ATTEMPTS + 1):
+            try:
+                with app.app_context():
+                    db.create_all()
+                break
+            except OperationalError:
+                if attempt == INIT_DB_MAX_ATTEMPTS:
+                    raise
+                print(
+                    "Database is not ready yet; "
+                    f"retrying in {INIT_DB_RETRY_DELAY_SECONDS}s "
+                    f"({attempt}/{INIT_DB_MAX_ATTEMPTS}).",
+                    flush=True
+                )
+                sleep(INIT_DB_RETRY_DELAY_SECONDS)
+        print("Database tables created.", flush=True)
 
     return app
 

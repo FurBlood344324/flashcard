@@ -1,0 +1,556 @@
+{% extends "base.html" %}
+
+{% block title %}{{ deck.name }} — Flashcard{% endblock %}
+
+{% block content %}
+<!-- Back Link + Header -->
+<header class="mb-8" data-testid="deck-header">
+    <a href="/" class="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors mb-4" data-testid="btn-back">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/>
+        </svg>
+        Destelere dön
+    </a>
+    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold tracking-tight text-white" data-testid="deck-title">{{ deck.name }}</h1>
+            {% if deck.description %}
+            <p class="text-sm text-zinc-500 mt-1" data-testid="deck-description">{{ deck.description }}</p>
+            {% endif %}
+        </div>
+        <div class="flex items-center gap-2">
+            <button
+                id="btn-study"
+                data-testid="btn-study"
+                onclick="startStudy()"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-lg
+                       bg-emerald-600 text-white hover:bg-emerald-500 transition-colors
+                       disabled:opacity-40 disabled:cursor-not-allowed
+                       focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-zinc-950"
+            >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z"/>
+                </svg>
+                Çalış
+            </button>
+            <button
+                id="btn-open-add-card"
+                data-testid="btn-open-add-card"
+                onclick="openAddCardModal()"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-lg
+                       bg-violet-600 text-white hover:bg-violet-500 transition-colors
+                       focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-zinc-950"
+            >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+                </svg>
+                Kart Ekle
+            </button>
+        </div>
+    </div>
+</header>
+
+<!-- ========== Card List View ========== -->
+<section id="card-list-view" data-testid="card-list-view">
+    <!-- Stats Bar -->
+    <div id="stats-bar" data-testid="stats-bar" class="flex items-center gap-4 mb-6 text-xs text-zinc-500">
+        <span data-testid="stat-total"><span id="stat-total-val" class="text-zinc-300 font-medium">0</span> kart</span>
+        <span class="text-zinc-800">|</span>
+        <span data-testid="stat-new"><span id="stat-new-val" class="text-sky-400 font-medium">0</span> yeni</span>
+        <span data-testid="stat-reviewed"><span id="stat-reviewed-val" class="text-amber-400 font-medium">0</span> çalışılmış</span>
+    </div>
+
+    <!-- Card Table -->
+    <div id="card-table" data-testid="card-table" class="space-y-2">
+        <!-- Populated by JS -->
+    </div>
+
+    <!-- Empty State -->
+    <div id="card-empty" data-testid="card-empty" class="hidden flex-col items-center justify-center py-20 text-center">
+        <div class="w-14 h-14 rounded-2xl bg-zinc-800/50 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/>
+            </svg>
+        </div>
+        <h2 class="text-sm font-semibold text-zinc-300 mb-1">Bu destede kart yok</h2>
+        <p class="text-sm text-zinc-500 max-w-xs">İlk kartınızı ekleyerek çalışmaya başlayın.</p>
+    </div>
+
+    <!-- Loading -->
+    <div id="card-loading" data-testid="card-loading" class="flex items-center justify-center py-20">
+        <div class="flex items-center gap-3 text-zinc-500 text-sm">
+            <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4Z"></path>
+            </svg>
+            Kartlar yükleniyor…
+        </div>
+    </div>
+</section>
+
+<!-- ========== Study View ========== -->
+<section id="study-view" data-testid="study-view" class="hidden">
+    <!-- Progress -->
+    <div class="flex items-center justify-between text-xs text-zinc-500 mb-6" data-testid="study-progress">
+        <span>Kart <span id="study-current" data-testid="study-current" class="text-zinc-300 font-medium">1</span> / <span id="study-total" data-testid="study-total" class="text-zinc-300 font-medium">0</span></span>
+        <button data-testid="btn-exit-study" onclick="exitStudy()" class="text-zinc-500 hover:text-zinc-300 transition-colors px-2 py-1 rounded-md hover:bg-zinc-800/50">
+            Çıkış
+        </button>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="w-full h-1 bg-zinc-800 rounded-full mb-8 overflow-hidden">
+        <div id="study-progress-bar" data-testid="study-progress-bar" class="h-full bg-violet-500 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+    </div>
+
+    <!-- Flip Card -->
+    <div class="flex items-center justify-center">
+        <div class="w-full max-w-lg perspective-1000" style="perspective: 1000px;">
+            <div
+                id="study-card"
+                data-testid="study-card"
+                class="card-inner relative w-full cursor-pointer"
+                style="min-height: 240px;"
+                onclick="flipCard()"
+            >
+                <!-- Front -->
+                <div class="card-face absolute inset-0 rounded-xl border border-zinc-800 bg-zinc-900 p-8 flex flex-col items-center justify-center text-center" data-testid="card-front">
+                    <span class="text-xs font-medium text-violet-400 uppercase tracking-wider mb-4">Soru</span>
+                    <p id="study-front-text" data-testid="study-front-text" class="text-lg font-medium text-zinc-100 leading-relaxed"></p>
+                </div>
+                <!-- Back -->
+                <div class="card-face card-back absolute inset-0 rounded-xl border border-zinc-800 bg-zinc-900 p-8 flex flex-col items-center justify-center text-center" data-testid="card-back">
+                    <span class="text-xs font-medium text-emerald-400 uppercase tracking-wider mb-4">Cevap</span>
+                    <p id="study-back-text" data-testid="study-back-text" class="text-lg font-medium text-zinc-100 leading-relaxed"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Flip Hint -->
+    <p id="flip-hint" data-testid="flip-hint" class="text-center text-xs text-zinc-600 mt-4">Kartı çevirmek için tıklayın</p>
+
+    <!-- Difficulty Buttons (shown after flip) -->
+    <div id="difficulty-btns" data-testid="difficulty-btns" class="hidden flex-wrap items-center justify-center gap-2 mt-8">
+        <button data-testid="btn-diff-again" onclick="rateDifficulty('again')"
+            class="px-4 py-2 text-sm font-medium rounded-lg bg-red-950/50 border border-red-900/40 text-red-300 hover:bg-red-900/40 transition-colors">
+            Tekrar
+        </button>
+        <button data-testid="btn-diff-hard" onclick="rateDifficulty('hard')"
+            class="px-4 py-2 text-sm font-medium rounded-lg bg-orange-950/50 border border-orange-900/40 text-orange-300 hover:bg-orange-900/40 transition-colors">
+            Zor
+        </button>
+        <button data-testid="btn-diff-good" onclick="rateDifficulty('good')"
+            class="px-4 py-2 text-sm font-medium rounded-lg bg-sky-950/50 border border-sky-900/40 text-sky-300 hover:bg-sky-900/40 transition-colors">
+            İyi
+        </button>
+        <button data-testid="btn-diff-easy" onclick="rateDifficulty('easy')"
+            class="px-4 py-2 text-sm font-medium rounded-lg bg-emerald-950/50 border border-emerald-900/40 text-emerald-300 hover:bg-emerald-900/40 transition-colors">
+            Kolay
+        </button>
+    </div>
+
+    <!-- Study Complete -->
+    <div id="study-complete" data-testid="study-complete" class="hidden flex-col items-center justify-center py-16 text-center">
+        <div class="w-16 h-16 rounded-full bg-emerald-950/40 border border-emerald-900/40 flex items-center justify-center mb-5">
+            <svg class="w-7 h-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/>
+            </svg>
+        </div>
+        <h2 class="text-lg font-semibold text-zinc-100 mb-1">Tebrikler!</h2>
+        <p class="text-sm text-zinc-500 mb-6">Bu destedeki tüm kartları tamamladınız.</p>
+        <button data-testid="btn-finish-study" onclick="exitStudy()" class="px-4 py-2 text-sm font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-500 transition-colors">
+            Listeye Dön
+        </button>
+    </div>
+</section>
+
+<!-- ========== Add Card Modal ========== -->
+<div id="modal-add-card" data-testid="modal-add-card-backdrop" class="hidden fixed inset-0 z-50">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeAddCardModal()"></div>
+    <div class="relative flex items-center justify-center min-h-full p-4">
+        <div class="animate-slide-up w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl" data-testid="modal-add-card">
+            <div class="flex items-center justify-between px-5 pt-5 pb-0">
+                <h2 class="text-base font-semibold text-white" data-testid="modal-add-card-title">Yeni Kart Ekle</h2>
+                <button data-testid="btn-close-add-card" onclick="closeAddCardModal()"
+                    class="text-zinc-500 hover:text-zinc-300 transition-colors p-1 -m-1 rounded-md hover:bg-zinc-800">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <form id="form-add-card" data-testid="form-add-card" class="px-5 py-4 space-y-4" onsubmit="handleAddCard(event)">
+                <div>
+                    <label for="input-card-front" class="block text-sm font-medium text-zinc-300 mb-1.5">
+                        Ön Yüz (Soru) <span class="text-red-400">*</span>
+                    </label>
+                    <textarea
+                        id="input-card-front"
+                        data-testid="input-card-front"
+                        required
+                        maxlength="500"
+                        rows="3"
+                        placeholder="Kartın ön yüzüne yazılacak soru"
+                        class="w-full rounded-lg bg-zinc-800/50 border border-zinc-700 px-3 py-2 text-sm text-zinc-100
+                               placeholder:text-zinc-600 resize-none
+                               focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-colors"
+                    ></textarea>
+                </div>
+                <div>
+                    <label for="input-card-back" class="block text-sm font-medium text-zinc-300 mb-1.5">
+                        Arka Yüz (Cevap) <span class="text-red-400">*</span>
+                    </label>
+                    <textarea
+                        id="input-card-back"
+                        data-testid="input-card-back"
+                        required
+                        maxlength="500"
+                        rows="3"
+                        placeholder="Kartın arka yüzüne yazılacak cevap"
+                        class="w-full rounded-lg bg-zinc-800/50 border border-zinc-700 px-3 py-2 text-sm text-zinc-100
+                               placeholder:text-zinc-600 resize-none
+                               focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-colors"
+                    ></textarea>
+                </div>
+                <div id="add-card-error" data-testid="add-card-error" class="hidden text-sm text-red-400"></div>
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" data-testid="btn-cancel-add-card" onclick="closeAddCardModal()"
+                        class="px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-200 rounded-md hover:bg-zinc-800 transition-colors">
+                        İptal
+                    </button>
+                    <button type="submit" id="btn-submit-card" data-testid="btn-submit-card"
+                        class="px-3.5 py-1.5 text-sm font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-500 transition-colors
+                               disabled:opacity-50 disabled:cursor-not-allowed
+                               focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-zinc-900">
+                        Ekle
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ========== Delete Confirm Modal ========== -->
+<div id="modal-delete" data-testid="modal-delete-backdrop" class="hidden fixed inset-0 z-50">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeDeleteModal()"></div>
+    <div class="relative flex items-center justify-center min-h-full p-4">
+        <div class="animate-slide-up w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-5" data-testid="modal-delete">
+            <h2 class="text-base font-semibold text-white mb-2" data-testid="modal-delete-title">Kartı Sil</h2>
+            <p class="text-sm text-zinc-400 mb-5">Bu kartı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.</p>
+            <div class="flex items-center justify-end gap-2">
+                <button data-testid="btn-cancel-delete" onclick="closeDeleteModal()"
+                    class="px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-200 rounded-md hover:bg-zinc-800 transition-colors">
+                    İptal
+                </button>
+                <button id="btn-confirm-delete" data-testid="btn-confirm-delete" onclick="confirmDelete()"
+                    class="px-3.5 py-1.5 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors
+                           disabled:opacity-50 disabled:cursor-not-allowed">
+                    Sil
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    /* ===== Constants ===== */
+    const DECK_ID = {{ deck.id }};
+    const API     = '/api';
+
+    /* ===== State ===== */
+    let flashcards    = [];
+    let studyIndex    = 0;
+    let isFlipped     = false;
+    let deleteTargetId = null;
+
+    /* ===== DOM ===== */
+    const $listView     = document.getElementById('card-list-view');
+    const $studyView    = document.getElementById('study-view');
+    const $cardTable    = document.getElementById('card-table');
+    const $cardEmpty    = document.getElementById('card-empty');
+    const $cardLoading  = document.getElementById('card-loading');
+    const $btnStudy     = document.getElementById('btn-study');
+
+    /* ===== API ===== */
+    async function apiGet(path) {
+        const res = await fetch(`${API}${path}`);
+        if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
+        return res.json();
+    }
+
+    async function apiPost(path, body) {
+        const res = await fetch(`${API}${path}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error?.message || `POST ${path} → ${res.status}`);
+        return data;
+    }
+
+    async function apiPatch(path, body) {
+        const res = await fetch(`${API}${path}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error?.message || res.status);
+        return data;
+    }
+
+    async function apiDelete(path) {
+        const res = await fetch(`${API}${path}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`DELETE ${path} → ${res.status}`);
+        return res.json();
+    }
+
+    /* ===== Card List ===== */
+    async function loadCards() {
+        try {
+            const { data } = await apiGet(`/decks/${DECK_ID}`);
+            flashcards = data.flashcards || [];
+            renderCardList();
+        } catch {
+            $cardLoading.innerHTML = '<p class="text-sm text-red-400">Kartlar yüklenemedi.</p>';
+        }
+    }
+
+    function renderCardList() {
+        $cardLoading.classList.add('hidden');
+
+        // Stats
+        const total = flashcards.length;
+        const newCount = flashcards.filter(c => c.difficulty === 'new').length;
+        const reviewed = total - newCount;
+
+        document.getElementById('stat-total-val').textContent = total;
+        document.getElementById('stat-new-val').textContent = newCount;
+        document.getElementById('stat-reviewed-val').textContent = reviewed;
+
+        // Study button state
+        $btnStudy.disabled = total === 0;
+
+        if (total === 0) {
+            $cardTable.classList.add('hidden');
+            $cardEmpty.classList.remove('hidden');
+            $cardEmpty.classList.add('flex');
+            return;
+        }
+
+        $cardEmpty.classList.add('hidden');
+        $cardTable.classList.remove('hidden');
+        $cardTable.innerHTML = flashcards.map((card, i) => cardRow(card, i)).join('');
+    }
+
+    function cardRow(card, index) {
+        const diffColors = {
+            'new':   'bg-sky-950/50 text-sky-400 border-sky-900/40',
+            'again': 'bg-red-950/50 text-red-400 border-red-900/40',
+            'hard':  'bg-orange-950/50 text-orange-400 border-orange-900/40',
+            'good':  'bg-blue-950/50 text-blue-400 border-blue-900/40',
+            'easy':  'bg-emerald-950/50 text-emerald-400 border-emerald-900/40',
+        };
+        const diffLabels = {
+            'new': 'Yeni', 'again': 'Tekrar', 'hard': 'Zor', 'good': 'İyi', 'easy': 'Kolay',
+        };
+        const cls = diffColors[card.difficulty] || diffColors['new'];
+        const label = diffLabels[card.difficulty] || card.difficulty;
+
+        return `
+        <div data-testid="card-row-${card.id}"
+             class="flex items-center gap-4 rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 hover:border-zinc-700 transition-colors animate-fade-in"
+             style="animation-delay: ${index * 40}ms">
+            <div class="flex-1 min-w-0">
+                <p class="text-sm text-zinc-200 truncate" data-testid="card-front-${card.id}">${escapeHtml(card.front)}</p>
+                <p class="text-xs text-zinc-500 truncate mt-0.5" data-testid="card-back-${card.id}">${escapeHtml(card.back)}</p>
+            </div>
+            <span class="shrink-0 text-xs font-medium px-2 py-0.5 rounded-md border ${cls}" data-testid="card-difficulty-${card.id}">
+                ${label}
+            </span>
+            <button
+                data-testid="btn-delete-card-${card.id}"
+                onclick="openDeleteModal(${card.id})"
+                class="shrink-0 text-zinc-600 hover:text-red-400 transition-colors p-1 rounded-md hover:bg-zinc-800"
+                title="Kartı sil"
+            >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/>
+                </svg>
+            </button>
+        </div>`;
+    }
+
+    function escapeHtml(str) {
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    /* ===== Add Card Modal ===== */
+    function openAddCardModal() {
+        document.getElementById('modal-add-card').classList.remove('hidden');
+        document.getElementById('add-card-error').classList.add('hidden');
+        document.getElementById('form-add-card').reset();
+        document.getElementById('input-card-front').focus();
+    }
+
+    function closeAddCardModal() {
+        document.getElementById('modal-add-card').classList.add('hidden');
+    }
+
+    async function handleAddCard(e) {
+        e.preventDefault();
+        const btn   = document.getElementById('btn-submit-card');
+        const front = document.getElementById('input-card-front').value.trim();
+        const back  = document.getElementById('input-card-back').value.trim();
+        const $err  = document.getElementById('add-card-error');
+
+        btn.disabled = true;
+        $err.classList.add('hidden');
+
+        try {
+            await apiPost(`/decks/${DECK_ID}/flashcards`, { front, back });
+            closeAddCardModal();
+            await loadCards();
+        } catch (err) {
+            $err.textContent = err.message;
+            $err.classList.remove('hidden');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    /* ===== Delete Modal ===== */
+    function openDeleteModal(cardId) {
+        deleteTargetId = cardId;
+        document.getElementById('modal-delete').classList.remove('hidden');
+    }
+
+    function closeDeleteModal() {
+        deleteTargetId = null;
+        document.getElementById('modal-delete').classList.add('hidden');
+    }
+
+    async function confirmDelete() {
+        if (!deleteTargetId) return;
+        const btn = document.getElementById('btn-confirm-delete');
+        btn.disabled = true;
+        try {
+            await apiDelete(`/flashcards/${deleteTargetId}`);
+            closeDeleteModal();
+            await loadCards();
+        } catch {
+            // silently fail
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    /* ===== Study Mode ===== */
+    function startStudy() {
+        if (flashcards.length === 0) return;
+        studyIndex = 0;
+        isFlipped = false;
+        $listView.classList.add('hidden');
+        $studyView.classList.remove('hidden');
+        document.getElementById('study-complete').classList.add('hidden');
+        showStudyCard();
+    }
+
+    function exitStudy() {
+        $studyView.classList.add('hidden');
+        $listView.classList.remove('hidden');
+        loadCards();
+    }
+
+    function showStudyCard() {
+        const card = flashcards[studyIndex];
+        if (!card) {
+            showStudyComplete();
+            return;
+        }
+
+        isFlipped = false;
+        const $card = document.getElementById('study-card');
+        $card.classList.remove('flipped');
+
+        document.getElementById('study-front-text').textContent = card.front;
+        document.getElementById('study-back-text').textContent  = card.back;
+        document.getElementById('study-current').textContent    = studyIndex + 1;
+        document.getElementById('study-total').textContent      = flashcards.length;
+
+        // Progress bar
+        const pct = ((studyIndex) / flashcards.length) * 100;
+        document.getElementById('study-progress-bar').style.width = `${pct}%`;
+
+        // Hide difficulty, show hint
+        document.getElementById('difficulty-btns').classList.add('hidden');
+        document.getElementById('difficulty-btns').classList.remove('flex');
+        document.getElementById('flip-hint').classList.remove('hidden');
+    }
+
+    function flipCard() {
+        if (isFlipped) return;
+        isFlipped = true;
+
+        document.getElementById('study-card').classList.add('flipped');
+        document.getElementById('flip-hint').classList.add('hidden');
+        document.getElementById('difficulty-btns').classList.remove('hidden');
+        document.getElementById('difficulty-btns').classList.add('flex');
+    }
+
+    async function rateDifficulty(difficulty) {
+        const card = flashcards[studyIndex];
+        if (!card) return;
+
+        // Disable buttons during request
+        const btns = document.querySelectorAll('#difficulty-btns button');
+        btns.forEach(b => b.disabled = true);
+
+        try {
+            await apiPatch(`/flashcards/${card.id}/review`, { difficulty });
+            card.difficulty = difficulty;
+            card.review_count = (card.review_count || 0) + 1;
+
+            studyIndex++;
+            if (studyIndex >= flashcards.length) {
+                document.getElementById('study-progress-bar').style.width = '100%';
+                setTimeout(showStudyComplete, 300);
+            } else {
+                showStudyCard();
+            }
+        } finally {
+            btns.forEach(b => b.disabled = false);
+        }
+    }
+
+    function showStudyComplete() {
+        document.getElementById('study-card').parentElement.parentElement.classList.add('hidden');
+        document.getElementById('difficulty-btns').classList.add('hidden');
+        document.getElementById('flip-hint').classList.add('hidden');
+        document.querySelector('[data-testid="study-progress"]').classList.add('hidden');
+        document.getElementById('study-complete').classList.remove('hidden');
+        document.getElementById('study-complete').classList.add('flex');
+    }
+
+    /* ===== Keyboard ===== */
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeAddCardModal();
+            closeDeleteModal();
+        }
+        // Space to flip in study mode
+        if (e.key === ' ' && !$studyView.classList.contains('hidden')) {
+            e.preventDefault();
+            flipCard();
+        }
+    });
+
+    /* ===== Init ===== */
+    loadCards();
+</script>
+{% endblock %}

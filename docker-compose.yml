@@ -5,9 +5,8 @@ services:
       dockerfile: Dockerfile
     environment:
       FLASK_ENV: production
-      DATABASE_URL: postgresql+psycopg://flashcard:flashcard@postgres:5432/flashcard
-    ports:
-      - "5000:5000"
+      DATABASE_URL: postgresql+psycopg://flashcard:flashcard@localhost:5432/flashcard
+    network_mode: "service:postgres"
     depends_on:
       postgres:
         condition: service_healthy
@@ -21,6 +20,7 @@ services:
       POSTGRES_PASSWORD: flashcard
     ports:
       - "5432:5432"
+      - "5000:5000"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

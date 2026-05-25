@@ -8,7 +8,7 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY src ./src
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip wheel --no-cache-dir --wheel-dir /wheels .
+    pip install --no-cache-dir .
 
 FROM python:3.11-slim AS runtime
 
@@ -17,9 +17,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY --from=builder /wheels /wheels
-RUN pip install --no-cache-dir --no-index --find-links=/wheels flashcard && \
-    rm -rf /wheels
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy source code so Flask can find templates/
+COPY src ./src
+
+WORKDIR /app/src
 
 EXPOSE 5000
 

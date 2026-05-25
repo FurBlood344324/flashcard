@@ -1,6 +1,6 @@
-# Flashcard API
+# Flashcard
 
-Bu proje, Test Mühendisliği dönem projesi için seçilen basit bir `Flashcard` mini servis başlangıcıdır. Flask ile monolitik ama katmanlı bir yapı kullanır: controller, service ve repository.
+Flask ile monolitik ama katmanlı bir Flashcard uygulaması. Backend katmanlı mimari (controller → service → repository) kullanır; frontend ise aynı Flask uygulaması içinde Jinja2 şablonları ve Tailwind CSS (CDN) ile sunulur.
 
 ## Gereksinimler
 
@@ -36,7 +36,7 @@ Uygulamayı çalıştır:
 uv run flask --app app run --debug
 ```
 
-API varsayılan olarak `http://127.0.0.1:5000` adresinde çalışır.
+Uygulama varsayılan olarak `http://127.0.0.1:5000` adresinde çalışır. Tarayıcıdan bu adrese giderek arayüzü kullanabilirsin.
 
 ## Testler
 
@@ -144,10 +144,96 @@ curl "$API_URL/api/decks"
 
 ## Endpointler
 
-- `GET /health`
-- `POST /api/decks`
-- `GET /api/decks`
-- `GET /api/decks/<deck_id>`
-- `POST /api/decks/<deck_id>/flashcards`
-- `PATCH /api/flashcards/<flashcard_id>/review`
-- `DELETE /api/flashcards/<flashcard_id>`
+### Sayfa (HTML)
+
+| Yol | Açıklama |
+|-----|----------|
+| `GET /` | Deste listesi |
+| `GET /decks/<deck_id>` | Deste detayı ve çalışma modu |
+
+### API (JSON)
+
+| Yol | Açıklama |
+|-----|----------|
+| `GET /health` | Sağlık kontrolü |
+| `POST /api/decks` | Yeni deste oluştur |
+| `GET /api/decks` | Tüm desteleri listele |
+| `GET /api/decks/<deck_id>` | Deste detayı (kartlarla birlikte) |
+| `POST /api/decks/<deck_id>/flashcards` | Desteye kart ekle |
+| `PATCH /api/flashcards/<flashcard_id>/review` | Kartı değerlendir |
+| `DELETE /api/flashcards/<flashcard_id>` | Kartı sil |
+
+## Frontend
+
+Arayüz Flask uygulamasının içinde Jinja2 şablonları ile sunulur. Ayrı bir build adımı veya ek bağımlılık gerektirmez; Tailwind CSS, CDN üzerinden yüklenir.
+
+### Şablonlar
+
+```
+src/templates/
+├── base.html          # Ortak layout, navbar, Tailwind CDN, font
+├── index.html         # Deste listesi + oluşturma modalı
+└── deck_detail.html   # Kart listesi, çalışma modu, kart ekleme/silme
+```
+
+### Özellikler
+
+- **Koyu tema** — zinc-950 tabanlı, göz yormayan tasarım
+- **Kart çevirme animasyonu** — CSS 3D transform ile çalışma deneyimi
+- **Zorluk derecelendirme** — Tekrar / Zor / İyi / Kolay
+- **Responsive** — mobil ve masaüstü uyumlu
+- **Playwright uyumlu** — tüm interaktif elementlerde `data-testid`
+
+### Playwright Test Selectors
+
+Tüm interaktif elementlerde `data-testid` attribute'u bulunur. Başlıca selector'lar:
+
+```
+# Deste listesi
+[data-testid="page-title"]
+[data-testid="btn-open-create-deck"]
+[data-testid="deck-grid"]
+[data-testid="deck-card-{id}"]
+[data-testid="form-create-deck"]
+[data-testid="input-deck-name"]
+[data-testid="btn-submit-deck"]
+[data-testid="empty-state"]
+
+# Deste detayı
+[data-testid="deck-title"]
+[data-testid="btn-study"]
+[data-testid="btn-open-add-card"]
+[data-testid="card-row-{id}"]
+[data-testid="btn-delete-card-{id}"]
+[data-testid="form-add-card"]
+
+# Çalışma modu
+[data-testid="study-view"]
+[data-testid="study-card"]
+[data-testid="btn-diff-again"]
+[data-testid="btn-diff-easy"]
+[data-testid="study-complete"]
+```
+
+## Proje Yapısı
+
+```
+src/
+├── app.py                          # Flask uygulama fabrikası
+├── config.py                       # Konfigürasyon
+├── extensions.py                   # SQLAlchemy instance
+├── models.py                       # Deck ve Flashcard modelleri
+├── controllers/
+│   ├── deck_controller.py          # /api/* JSON endpointleri
+│   └── view_controller.py          # / ve /decks/<id> sayfa endpointleri
+├── services/
+│   ├── deck_service.py             # İş mantığı
+│   └── errors.py                   # Servis hataları
+├── repositories/
+│   ├── deck_repository.py          # Deck veritabanı işlemleri
+│   └── flashcard_repository.py     # Flashcard veritabanı işlemleri
+└── templates/
+    ├── base.html                   # Ortak layout
+    ├── index.html                  # Deste listesi
+    └── deck_detail.html            # Deste detay ve çalışma modu
+```

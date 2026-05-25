@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+
+{% block title %}Desteler — Flashcard{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<header class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8" data-testid="page-header">
+    <div>
+        <h1 class="text-2xl font-bold tracking-tight text-white" data-testid="page-title">Desteler</h1>
+        <p class="text-sm text-zinc-500 mt-1" data-testid="page-subtitle">Kartlarınızı düzenleyin ve çalışmaya başlayın</p>
+    </div>
+    <button
+        id="btn-open-create-deck"
+        data-testid="btn-open-create-deck"
+        onclick="openModal()"
+        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-lg
+               bg-violet-600 text-white hover:bg-violet-500
+               transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-zinc-950"
+    >
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+        </svg>
+        Yeni Deste
+    </button>
+</header>
+
+<!-- Deck Grid -->
+<section id="deck-grid" data-testid="deck-grid" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <!-- Populated by JS -->
+</section>
+
+<!-- Empty State -->
+<div id="empty-state" data-testid="empty-state" class="hidden flex-col items-center justify-center py-24 text-center">
+    <div class="w-16 h-16 rounded-2xl bg-zinc-800/50 flex items-center justify-center mb-5">
+        <svg class="w-7 h-7 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z"/>
+        </svg>
+    </div>
+    <h2 class="text-base font-semibold text-zinc-300 mb-1">Henüz deste yok</h2>
+    <p class="text-sm text-zinc-500 max-w-xs">Yeni bir deste oluşturarak kartlarınızı organize etmeye başlayın.</p>
+</div>
+
+<!-- Loading State -->
+<div id="loading-state" data-testid="loading-state" class="flex items-center justify-center py-24">
+    <div class="flex items-center gap-3 text-zinc-500 text-sm">
+        <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4Z"></path>
+        </svg>
+        Yükleniyor…
+    </div>
+</div>
+
+<!-- Error Banner -->
+<div id="error-banner" data-testid="error-banner" class="hidden">
+    <div class="rounded-lg bg-red-950/50 border border-red-900/50 p-4 text-sm text-red-300 flex items-start gap-3">
+        <svg class="w-5 h-5 text-red-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"/>
+        </svg>
+        <span id="error-text" data-testid="error-text">Bir hata oluştu.</span>
+    </div>
+</div>
+
+<!-- ========== Create Deck Modal ========== -->
+<div id="modal-backdrop" data-testid="modal-backdrop" class="hidden fixed inset-0 z-50">
+    <!-- Overlay -->
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeModal()"></div>
+
+    <!-- Modal Panel -->
+    <div class="relative flex items-center justify-center min-h-full p-4">
+        <div
+            id="modal-panel"
+            data-testid="modal-create-deck"
+            class="animate-slide-up w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl"
+        >
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-5 pt-5 pb-0">
+                <h2 class="text-base font-semibold text-white" data-testid="modal-title">Yeni Deste Oluştur</h2>
+                <button
+                    data-testid="btn-close-modal"
+                    onclick="closeModal()"
+                    class="text-zinc-500 hover:text-zinc-300 transition-colors p-1 -m-1 rounded-md hover:bg-zinc-800"
+                >
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <form id="form-create-deck" data-testid="form-create-deck" class="px-5 py-4 space-y-4" onsubmit="handleCreateDeck(event)">
+                <div>
+                    <label for="input-deck-name" class="block text-sm font-medium text-zinc-300 mb-1.5">
+                        Deste Adı <span class="text-red-400">*</span>
+                    </label>
+                    <input
+                        id="input-deck-name"
+                        data-testid="input-deck-name"
+                        type="text"
+                        required
+                        maxlength="120"
+                        placeholder="ör. İngilizce Kelimeler"
+                        class="w-full rounded-lg bg-zinc-800/50 border border-zinc-700 px-3 py-2 text-sm text-zinc-100
+                               placeholder:text-zinc-600
+                               focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500
+                               transition-colors"
+                    >
+                </div>
+                <div>
+                    <label for="input-deck-desc" class="block text-sm font-medium text-zinc-300 mb-1.5">
+                        Açıklama
+                    </label>
+                    <input
+                        id="input-deck-desc"
+                        data-testid="input-deck-desc"
+                        type="text"
+                        maxlength="255"
+                        placeholder="İsteğe bağlı kısa açıklama"
+                        class="w-full rounded-lg bg-zinc-800/50 border border-zinc-700 px-3 py-2 text-sm text-zinc-100
+                               placeholder:text-zinc-600
+                               focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500
+                               transition-colors"
+                    >
+                </div>
+                <!-- Modal Error -->
+                <div id="modal-error" data-testid="modal-error" class="hidden text-sm text-red-400"></div>
+
+                <!-- Modal Footer -->
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button
+                        type="button"
+                        data-testid="btn-cancel-create"
+                        onclick="closeModal()"
+                        class="px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-200 rounded-md hover:bg-zinc-800 transition-colors"
+                    >
+                        İptal
+                    </button>
+                    <button
+                        type="submit"
+                        id="btn-submit-deck"
+                        data-testid="btn-submit-deck"
+                        class="px-3.5 py-1.5 text-sm font-medium rounded-lg bg-violet-600 text-white
+                               hover:bg-violet-500 transition-colors
+                               disabled:opacity-50 disabled:cursor-not-allowed
+                               focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-zinc-900"
+                    >
+                        Oluştur
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    /* ===== State ===== */
+    const API = '/api';
+
+    /* ===== DOM References ===== */
+    const $grid       = document.getElementById('deck-grid');
+    const $empty      = document.getElementById('empty-state');
+    const $loading    = document.getElementById('loading-state');
+    const $errorBanner= document.getElementById('error-banner');
+    const $errorText  = document.getElementById('error-text');
+    const $modal      = document.getElementById('modal-backdrop');
+    const $modalError = document.getElementById('modal-error');
+    const $form       = document.getElementById('form-create-deck');
+
+    /* ===== API Helpers ===== */
+    async function apiGet(path) {
+        const res = await fetch(`${API}${path}`);
+        if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
+        return res.json();
+    }
+
+    async function apiPost(path, body) {
+        const res = await fetch(`${API}${path}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error?.message || `POST ${path} → ${res.status}`);
+        return data;
+    }
+
+    /* ===== Render ===== */
+    function renderDecks(decks) {
+        $loading.classList.add('hidden');
+        $errorBanner.classList.add('hidden');
+
+        if (decks.length === 0) {
+            $grid.classList.add('hidden');
+            $empty.classList.remove('hidden');
+            $empty.classList.add('flex');
+            return;
+        }
+
+        $empty.classList.add('hidden');
+        $grid.classList.remove('hidden');
+        $grid.innerHTML = decks.map((deck, i) => deckCard(deck, i)).join('');
+    }
+
+    function deckCard(deck, index) {
+        const count = deck.flashcard_count ?? 0;
+        const desc  = deck.description
+            ? `<p class="text-sm text-zinc-500 line-clamp-2 mt-1">${escapeHtml(deck.description)}</p>`
+            : '';
+        const date  = new Date(deck.created_at).toLocaleDateString('tr-TR', {
+            day: 'numeric', month: 'short', year: 'numeric'
+        });
+
+        return `
+        <a href="/decks/${deck.id}"
+           data-testid="deck-card-${deck.id}"
+           class="group block rounded-xl border border-zinc-800 bg-zinc-900/50 p-5
+                  hover:border-zinc-700 hover:bg-zinc-800/40 transition-all duration-200
+                  animate-fade-in"
+           style="animation-delay: ${index * 60}ms"
+        >
+            <div class="flex items-start justify-between mb-3">
+                <h3 class="text-sm font-semibold text-zinc-100 group-hover:text-white transition-colors" data-testid="deck-name-${deck.id}">
+                    ${escapeHtml(deck.name)}
+                </h3>
+                <span class="shrink-0 ml-3 inline-flex items-center gap-1 text-xs font-medium text-zinc-500 bg-zinc-800 rounded-md px-2 py-0.5" data-testid="deck-count-${deck.id}">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 0 0-1.883 2.542l.857 6a2.25 2.25 0 0 0 2.227 1.932H19.05a2.25 2.25 0 0 0 2.227-1.932l.857-6a2.25 2.25 0 0 0-1.883-2.542m-16.5 0V6A2.25 2.25 0 0 1 6 3.75h3.879a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H18A2.25 2.25 0 0 1 20.25 9v.776"/>
+                    </svg>
+                    ${count}
+                </span>
+            </div>
+            ${desc}
+            <div class="mt-4 flex items-center justify-between">
+                <time class="text-xs text-zinc-600">${date}</time>
+                <span class="text-xs text-violet-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    Aç →
+                </span>
+            </div>
+        </a>`;
+    }
+
+    function escapeHtml(str) {
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    function showError(message) {
+        $loading.classList.add('hidden');
+        $errorText.textContent = message;
+        $errorBanner.classList.remove('hidden');
+    }
+
+    /* ===== Modal ===== */
+    function openModal() {
+        $modal.classList.remove('hidden');
+        $modalError.classList.add('hidden');
+        $form.reset();
+        document.getElementById('input-deck-name').focus();
+    }
+
+    function closeModal() {
+        $modal.classList.add('hidden');
+    }
+
+    async function handleCreateDeck(e) {
+        e.preventDefault();
+        const btn  = document.getElementById('btn-submit-deck');
+        const name = document.getElementById('input-deck-name').value.trim();
+        const desc = document.getElementById('input-deck-desc').value.trim();
+
+        btn.disabled = true;
+        $modalError.classList.add('hidden');
+
+        try {
+            await apiPost('/decks', { name, description: desc || null });
+            closeModal();
+            await loadDecks();
+        } catch (err) {
+            $modalError.textContent = err.message;
+            $modalError.classList.remove('hidden');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    /* ===== Keyboard ===== */
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal();
+    });
+
+    /* ===== Init ===== */
+    async function loadDecks() {
+        try {
+            const { data } = await apiGet('/decks');
+            renderDecks(data);
+        } catch (err) {
+            showError('Desteler yüklenemedi. Lütfen sayfayı yenileyin.');
+        }
+    }
+
+    loadDecks();
+</script>
+{% endblock %}
