@@ -85,6 +85,63 @@ Postman içinde şu iki dosyayı import edebilirsin:
 
 Collection içindeki istekler sırasıyla çalıştırıldığında `deck_id` ve `flashcard_id` environment değişkenleri otomatik set edilir.
 
+## Kubernetes / Minikube
+
+Bu manifestler Flask API'yi ve yerel geliştirme için PostgreSQL'i Minikube ortamına deploy eder. API başlangıçta veritabanı tablolarını `flask --app app init-db` komutu ile oluşturur.
+
+Minikube başlat:
+
+```bash
+minikube start
+```
+
+Docker image'ını Minikube Docker ortamında build et:
+
+```bash
+eval $(minikube docker-env)
+docker build -t flashcard-api:dev .
+```
+
+Kubernetes kaynaklarını uygula:
+
+```bash
+kubectl apply -f k8s/postgres-secret.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/postgres-pvc.yaml
+kubectl apply -f k8s/postgres-service.yaml
+kubectl apply -f k8s/postgres-deployment.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+```
+
+Pod ve Service durumunu kontrol et:
+
+```bash
+kubectl get pods
+kubectl get service postgres
+kubectl get service flashcard-api
+```
+
+Deployment'ların hazır olmasını bekle:
+
+```bash
+kubectl rollout status deployment/postgres
+kubectl rollout status deployment/flashcard-api
+```
+
+API URL'ini al ve health check çalıştır:
+
+```bash
+API_URL=$(minikube service flashcard-api --url)
+curl "$API_URL/health"
+```
+
+Veritabanı kullanan endpointleri dene:
+
+```bash
+curl "$API_URL/api/decks"
+```
+
 ## Endpointler
 
 - `GET /health`

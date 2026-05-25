@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flashcard-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flashcard-api
+  template:
+    metadata:
+      labels:
+        app: flashcard-api
+    spec:
+      containers:
+        - name: flashcard-api
+          image: flashcard-api:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - configMapRef:
+                name: flashcard-api-config
+            - secretRef:
+                name: flashcard-postgres-secret
+          command:
+            - sh
+            - -c
+          args:
+            - flask --app app init-db && flask --app app run --host=0.0.0.0 --port=5000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 20
