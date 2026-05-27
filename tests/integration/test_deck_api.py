@@ -3,7 +3,6 @@ from flask.testing import FlaskClient
 from tests.factories import DeckFactory, FlashcardFactory
 
 from extensions import db
-from models import Deck
 
 
 def _auth_headers(client: FlaskClient) -> dict[str, str]:
@@ -16,18 +15,18 @@ def _auth_headers(client: FlaskClient) -> dict[str, str]:
 @pytest.mark.integration
 def test_create_and_get_deck_with_flashcard(client: FlaskClient) -> None:
     headers = _auth_headers(client)
-    deck_payload = DeckFactory.build()
+    deck_payload = DeckFactory.payload()
     create_response = client.post(
         "/api/decks",
-        json={"name": deck_payload.name, "description": deck_payload.description},
+        json=deck_payload,
         headers=headers,
     )
     deck_id = create_response.get_json()["data"]["id"]
 
-    flashcard_payload = FlashcardFactory.build()
+    flashcard_payload = FlashcardFactory.payload()
     flashcard_response = client.post(
         f"/api/decks/{deck_id}/flashcards",
-        json={"front": flashcard_payload.front, "back": flashcard_payload.back},
+        json=flashcard_payload,
         headers=headers,
     )
     get_response = client.get(f"/api/decks/{deck_id}", headers=headers)
@@ -46,17 +45,18 @@ def test_create_and_get_deck_with_flashcard(client: FlaskClient) -> None:
 @pytest.mark.integration
 def test_get_deck_due_only_filters_due_cards(client: FlaskClient) -> None:
     headers = _auth_headers(client)
-    deck_payload = DeckFactory.build()
+    deck_payload = DeckFactory.payload()
     create_resp = client.post(
         "/api/decks",
-        json={"name": deck_payload.name, "description": deck_payload.description},
+        json=deck_payload,
         headers=headers,
     )
     deck_id = create_resp.get_json()["data"]["id"]
 
+    flashcard_payload = FlashcardFactory.payload(front="Yeni kart", back="Cevap")
     client.post(
         f"/api/decks/{deck_id}/flashcards",
-        json={"front": "Yeni kart", "back": "Cevap"},
+        json=flashcard_payload,
         headers=headers,
     )
 
@@ -78,10 +78,10 @@ def test_get_deck_due_only_filters_due_cards(client: FlaskClient) -> None:
 @pytest.mark.integration
 def test_duplicate_deck_name_returns_409(client: FlaskClient) -> None:
     headers = _auth_headers(client)
-    payload = DeckFactory.build()
-    client.post("/api/decks", json={"name": payload.name}, headers=headers)
+    payload = DeckFactory.payload(description=None)
+    client.post("/api/decks", json={"name": payload["name"]}, headers=headers)
 
-    response = client.post("/api/decks", json={"name": payload.name}, headers=headers)
+    response = client.post("/api/decks", json={"name": payload["name"]}, headers=headers)
 
     assert response.status_code == 409
     assert response.get_json()["error"]["code"] == "conflict"
@@ -90,13 +90,14 @@ def test_duplicate_deck_name_returns_409(client: FlaskClient) -> None:
 @pytest.mark.integration
 def test_delete_flashcard_removes_it_from_deck(client: FlaskClient) -> None:
     headers = _auth_headers(client)
-    deck = Deck(name="Silinecek", description=None, user_id=1)
+    deck = DeckFactory.build(name="Silinecek", description=None, user_id=1)
     db.session.add(deck)
     db.session.commit()
 
+    flashcard_payload = FlashcardFactory.payload(front="2 + 2", back="4")
     flashcard_response = client.post(
         f"/api/decks/{deck.id}/flashcards",
-        json={"front": "2 + 2", "back": "4"},
+        json=flashcard_payload,
         headers=headers,
     )
     flashcard_id = flashcard_response.get_json()["data"]["id"]
@@ -111,13 +112,14 @@ def test_delete_flashcard_removes_it_from_deck(client: FlaskClient) -> None:
 @pytest.mark.integration
 def test_invalid_flashcard_payload_returns_422(client: FlaskClient) -> None:
     headers = _auth_headers(client)
-    deck = Deck(name="Validasyon", description=None, user_id=1)
+    deck = DeckFactory.build(name="Validasyon", description=None, user_id=1)
     db.session.add(deck)
     db.session.commit()
 
+    invalid_payload = FlashcardFactory.payload(front="", back="Cevap")
     response = client.post(
         f"/api/decks/{deck.id}/flashcards",
-        json={"front": "", "back": "Cevap"},
+        json=invalid_payload,
         headers=headers,
     )
 

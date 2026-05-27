@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
 import pytest
+from tests.factories import DeckFactory, FlashcardFactory
 
 from services.deck_service import DeckService
 from services.errors import ConflictError, NotFoundError, ValidationError
@@ -117,22 +118,24 @@ def test_create_deck_rejects_empty_name(service: DeckService) -> None:
 
 @pytest.mark.unit
 def test_create_deck_rejects_duplicate_name(service: DeckService) -> None:
-    service.create_deck({"name": "Python"}, TEST_USER)
+    payload = DeckFactory.payload(name="Python", description=None)
+    service.create_deck(payload, TEST_USER)
 
     with pytest.raises(ConflictError):
-        service.create_deck({"name": "Python"}, TEST_USER)
+        service.create_deck(payload, TEST_USER)
 
 
 @pytest.mark.unit
 def test_add_flashcard_requires_existing_deck(service: DeckService) -> None:
+    flashcard_payload = FlashcardFactory.payload(front="Soru", back="Cevap")
     with pytest.raises(NotFoundError):
-        service.add_flashcard(999, {"front": "Soru", "back": "Cevap"}, TEST_USER)
+        service.add_flashcard(999, flashcard_payload, TEST_USER)
 
 
 @pytest.mark.unit
 def test_review_flashcard_updates_difficulty_and_count(service: DeckService) -> None:
-    deck = service.create_deck({"name": "Python"}, TEST_USER)
-    card_data = {"front": "Flask nedir?", "back": "Web framework"}
+    deck = service.create_deck(DeckFactory.payload(name="Python", description=None), TEST_USER)
+    card_data = FlashcardFactory.payload(front="Flask nedir?", back="Web framework")
     flashcard = service.add_flashcard(deck.id, card_data, TEST_USER)
     flashcard.deck = deck
 
@@ -158,8 +161,12 @@ def test_review_flashcard_updates_difficulty_and_count(service: DeckService) -> 
 def test_review_flashcard_sm2_intervals(
     service: DeckService, difficulty: str, expected_interval: float
 ) -> None:
-    deck = service.create_deck({"name": "SM2"}, TEST_USER)
-    flashcard = service.add_flashcard(deck.id, {"front": "S", "back": "C"}, TEST_USER)
+    deck = service.create_deck(DeckFactory.payload(name="SM2", description=None), TEST_USER)
+    flashcard = service.add_flashcard(
+        deck.id,
+        FlashcardFactory.payload(front="S", back="C"),
+        TEST_USER,
+    )
     flashcard.deck = deck
 
     reviewed = service.review_flashcard(flashcard.id, {"difficulty": difficulty}, TEST_USER)
@@ -173,8 +180,12 @@ def test_review_flashcard_sm2_intervals(
 
 @pytest.mark.unit
 def test_review_flashcard_builds_on_existing_interval(service: DeckService) -> None:
-    deck = service.create_deck({"name": "Build"}, TEST_USER)
-    flashcard = service.add_flashcard(deck.id, {"front": "S", "back": "C"}, TEST_USER)
+    deck = service.create_deck(DeckFactory.payload(name="Build", description=None), TEST_USER)
+    flashcard = service.add_flashcard(
+        deck.id,
+        FlashcardFactory.payload(front="S", back="C"),
+        TEST_USER,
+    )
     flashcard.deck = deck
 
     first = service.review_flashcard(flashcard.id, {"difficulty": "good"}, TEST_USER)
@@ -190,8 +201,12 @@ def test_review_flashcard_rejects_invalid_difficulty(
     service: DeckService,
     difficulty: str,
 ) -> None:
-    deck = service.create_deck({"name": "Python"}, TEST_USER)
-    flashcard = service.add_flashcard(deck.id, {"front": "Soru", "back": "Cevap"}, TEST_USER)
+    deck = service.create_deck(DeckFactory.payload(name="Python", description=None), TEST_USER)
+    flashcard = service.add_flashcard(
+        deck.id,
+        FlashcardFactory.payload(front="Soru", back="Cevap"),
+        TEST_USER,
+    )
     flashcard.deck = deck
 
     with pytest.raises(ValidationError):
@@ -200,7 +215,7 @@ def test_review_flashcard_rejects_invalid_difficulty(
 
 @pytest.mark.unit
 def test_export_deck_to_s3_checks_ownership_and_returns_result(service: DeckService) -> None:
-    deck = service.create_deck({"name": "Export"}, TEST_USER)
+    deck = service.create_deck(DeckFactory.payload(name="Export", description=None), TEST_USER)
     s3_service = FakeS3Service()
 
     result = service.export_deck_to_s3(deck.id, TEST_USER, s3_service)

@@ -7,6 +7,7 @@ import pytest
 import requests
 from docker.errors import DockerException
 from testcontainers.core.container import DockerContainer
+from tests.factories import DeckFactory, FlashcardFactory
 
 from app import create_app
 from extensions import db
@@ -79,17 +80,25 @@ def test_export_deck_creates_s3_object_on_localstack() -> None:
             db.create_all()
             client = app.test_client()
             headers = _auth_headers(client)
+            deck_payload = DeckFactory.payload(
+                name="AWS Backup",
+                description="LocalStack export testi",
+            )
 
             deck_response = client.post(
                 "/api/decks",
-                json={"name": "AWS Backup", "description": "LocalStack export testi"},
+                json=deck_payload,
                 headers=headers,
             )
             deck_id = deck_response.get_json()["data"]["id"]
 
+            flashcard_payload = FlashcardFactory.payload(
+                front="S3 nedir?",
+                back="Object storage",
+            )
             client.post(
                 f"/api/decks/{deck_id}/flashcards",
-                json={"front": "S3 nedir?", "back": "Object storage"},
+                json=flashcard_payload,
                 headers=headers,
             )
 
