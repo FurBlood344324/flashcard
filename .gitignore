@@ -7,6 +7,8 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+junit*.xml
+newman-junit.xml
 dist/
 build/
 *.egg-info/
@@ -15,3 +17,5 @@ frontend/node_modules/
 frontend/.next/
 frontend/out/
 CLAUDE.md
+
+

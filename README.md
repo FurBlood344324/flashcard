@@ -140,80 +140,77 @@ CI içinde de aynı collection aynı environment dosyasıyla Newman üzerinden �
 
 ## Kubernetes / Minikube
 
-### Ön koşullar
+Proje Argo CD GitOps ile yonetilir. Tum altyapi (PostgreSQL, LocalStack, Prometheus + Grafana) ve uygulama `k8s/argocd/` altindaki Application kaynaklari uzerinden deploy edilir.
 
-Minikube başlat:
+| Namespace | Icerik |
+|---|---|
+| `argocd` | Argo CD'nin kendisi |
+| `infrastructure` | PostgreSQL, LocalStack, Prometheus + Grafana |
+| `flashcard` | Flask API uygulamasi |
 
-```bash
-minikube start
-eval $(minikube docker-env)
-docker build -t flashcard-api:dev .
-```
+### On kosullar
 
-Helm repolarını ekle:
-
-```bash
-helm repo add bitnami https://charts.bitnami.com/bitnami
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-```
-
-### PostgreSQL (Helm)
+Minikube ve `argocd` CLI gereklidir:
 
 ```bash
-helm install postgres bitnami/postgresql \
-  --set auth.database=flashcard \
-  --set auth.username=flashcard \
-  --set auth.password=flashcard \
-  --set primary.persistence.size=1Gi
+# Arch / CachyOS
+sudo pacman -S argocd
+
+# macOS
+brew install argocd
+
+# Diger Linux
+curl -sSL -o /tmp/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+chmod +x /tmp/argocd
+sudo mv /tmp/argocd /usr/local/bin/argocd
 ```
 
-### Prometheus + Grafana (Helm)
+### Hizli baslangic
 
 ```bash
-helm install monitoring prometheus-community/kube-prometheus-stack
+./scripts/kubernetes-start.sh   # Minikube + Docker imaji + Argo CD kurulumu
+./scripts/kubernetes-sync.sh    # Tum uygulamalari sync'le + durum kontrolu
 ```
 
-Prometheus'a eriş:
+Ardindan port forward ve erisim bilgileri icin:
 
 ```bash
-kubectl port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090 > /dev/null 2>&1 &
-# http://localhost:9090
+./scripts/kubernetes-forward.sh   # Argo CD, Prometheus, Grafana port forward
+./scripts/kubernetes-result.sh    # URL'ler ve credential'lar
 ```
 
-Grafana'ya eriş:
+### Scriptler
 
-```bash
-kubectl port-forward svc/monitoring-grafana 3000:80 > /dev/null 2>&1 &
-# http://localhost:3000  (admin / prom-operator)
-```
+| Script | Yaptigi |
+|---|---|
+| `kubernetes-start.sh` | Minikube'u baslatir, Docker imajini build eder, Argo CD kurar, `argocd` CLI ile login olur |
+| `kubernetes-sync.sh` | Tum Application'lari (postgres, localstack, monitoring, flashcard-api) sync'ler, `kubernetes-check.sh` ile durumu kontrol eder |
+| `kubernetes-check.sh` | Tum namespace'lerde rollout durumu ve Argo CD Application health/sync status |
+| `kubernetes-forward.sh` | Argo CD UI (8080), Prometheus (9090), Grafana (3000) icin port-forward baslatir |
+| `kubernetes-result.sh` | Servis URL'leri ve credential'lari yazdirir |
+| `kubernetes-smoke-test.sh` | `/health` endpoint'ine retry'li istek, Argo CD durumu, pod kontrolu — CI'da da kullanilir |
+| `kubernetes-delete.sh` | Tum Argo CD uygulamalarini ve cluster'i siler |
+| `kubernetes-test-with-k6.sh` | k6 ile yuk testi |
 
-Dashboard import: Grafana → Dashboards → Import → `monitoring/grafana-dashboard.json`
+### Sonraki deploy'lar
 
-### Flask API
+Argo CD automated sync aktif. Main branch'e push yaptiginda degisiklikler otomatik sync'lenir.
 
-```bash
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/app-secret.yaml
-kubectl apply -f k8s/service.yaml
-kubectl apply -f k8s/deployment.yaml
-kubectl apply -f k8s/servicemonitor.yaml
-```
+### Servislere erisim
 
-Durum kontrolü:
+`kubernetes-forward.sh` ile acilan portlar:
 
-```bash
-kubectl rollout status deployment/flashcard-api
-API_URL=$(minikube service flashcard-api --url)
-curl "$API_URL/health"
-curl "$API_URL/api/decks"
-```
+| Servis | Port |
+|---|---|
+| Argo CD UI | `http://localhost:8080` |
+| Prometheus | `http://localhost:9090` |
+| Grafana | `http://localhost:3000` (admin / `kubernetes-result.sh` den ogren) |
+| Flashcard API | `minikube service flashcard-api -n flashcard --url` |
 
 ### Temizlik
 
 ```bash
-helm uninstall postgres monitoring
-kubectl delete -f k8s/
+./scripts/kubernetes-delete.sh
 ```
 
 ## S3 Export
@@ -368,4 +365,34 @@ src/
     ├── auth.html                   # Giriş / kayıt sayfası
     ├── index.html                  # Deste listesi
     └── deck_detail.html            # Deste detay ve çalışma modu
+k8s/
+├── argocd/                             # Argo CD Application kaynaklari
+│   ├── app-of-apps.yaml               # Root app (bootstrapping)
+│   ├── infrastructure-app.yaml        # PostgreSQL, LocalStack, Monitoring
+│   └── flashcard-api-app.yaml         # Flask API uygulamasi
+├── infrastructure/                    # Helm values dosyalari
+│   ├── namespace.yaml
+│   ├── postgres-values.yaml
+│   ├── localstack-values.yaml
+│   └── monitoring-values.yaml
+├── apps/flashcard/                    # Kustomize overlay
+│   ├── namespace.yaml
+│   ├── kustomization.yaml
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   ├── configmap.yaml
+│   ├── servicemonitor.yaml
+│   └── secrets/
+│       └── flashcard-api-secret.yaml
+└── bootstrap/
+    └── argo-cd-install.sh             # Argo CD kurulumu
+scripts/
+├── kubernetes-start.sh                # Minikube + imaj build + Argo CD kurulumu
+├── kubernetes-sync.sh                 # Tum app'leri sync + secret + durum kontrolu
+├── kubernetes-check.sh                # Rollout + Argo CD durumu
+├── kubernetes-forward.sh              # Port forward (Argo CD, Prometheus, Grafana)
+├── kubernetes-result.sh               # URL'ler ve credential'lar
+├── kubernetes-smoke-test.sh           # /health kontrolu + Argo CD durumu
+├── kubernetes-delete.sh               # Tum kaynaklari temizle
+└── kubernetes-test-with-k6.sh         # k6 load test
 ```

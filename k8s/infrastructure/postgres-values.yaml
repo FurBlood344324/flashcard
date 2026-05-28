@@ -1,0 +1,9 @@
+auth:
+  database: flashcard
+  username: flashcard
+  password: flashcard
+  postgresPassword: flashcard
+
+primary:
+  persistence:
+    size: 1Gi

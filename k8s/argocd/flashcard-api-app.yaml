@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: flashcard-api
+  namespace: argocd
+  annotations:
+    deploy-version: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/FurBlood344324/flashcard.git
+    targetRevision: main
+    path: k8s/apps/flashcard
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: flashcard
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+

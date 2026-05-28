@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: postgres
+  namespace: infrastructure
+  labels:
+    app: postgres
+spec:
+  containers:
+    - name: postgres
+      image: postgres:16-alpine
+      env:
+        - name: POSTGRES_DB
+          value: flashcard
+        - name: POSTGRES_USER
+          value: flashcard
+        - name: POSTGRES_PASSWORD
+          value: flashcard
+      ports:
+        - containerPort: 5432
+      readinessProbe:
+        exec:
+          command: ["pg_isready", "-U", "flashcard", "-d", "flashcard"]
+        initialDelaySeconds: 5
+        periodSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-postgresql
+  namespace: infrastructure
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

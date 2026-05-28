@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -9,7 +10,7 @@ permissions:
   packages: write
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,11 +29,43 @@ jobs:
       - name: Run ruff
         run: uv run ruff check .
 
+  test:
+    runs-on: ubuntu-latest
+    needs: [lint]
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync
+
       - name: Run tests
-        run: uv run pytest -q -m "not browser"
+        run: uv run pytest -q -m "not browser" --junitxml=junit.xml --cov-report=html
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: junit.xml
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
 
   browser-tests:
     runs-on: ubuntu-latest
+    needs: [lint]
 
     steps:
       - name: Checkout repo
@@ -51,7 +84,14 @@ jobs:
         run: uv run playwright install chromium --with-deps
 
       - name: Run browser tests
-        run: uv run pytest tests/e2e/ -m browser -v --browser chromium
+        run: uv run pytest tests/e2e/ -m browser -v --browser chromium --junitxml=junit-browser.xml
+
+      - name: Upload browser test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-results
+          path: junit-browser.xml
 
       - name: Upload screenshots on failure
         if: failure()
@@ -62,6 +102,7 @@ jobs:
 
   postman:
     runs-on: ubuntu-latest
+    needs: [lint]
 
     steps:
       - name: Checkout repo
@@ -112,7 +153,14 @@ jobs:
           exit 1
 
       - name: Run Postman collection with Newman
-        run: newman run postman/flashcard-api.postman_collection.json -e postman/flashcard-local.postman_environment.json --bail
+        run: newman run postman/flashcard-api.postman_collection.json -e postman/flashcard-local.postman_environment.json --bail --reporters junit,cli --reporter-junit-export newman-junit.xml
+
+      - name: Upload Newman test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-test-results
+          path: newman-junit.xml
 
       - name: Print API logs on failure
         if: failure()
@@ -122,7 +170,7 @@ jobs:
         if: always()
         run: kill "$(cat /tmp/flashcard-postman.pid)"
 
-  docker:
+  build:
     runs-on: ubuntu-latest
     needs: [test, browser-tests, postman]
 
@@ -137,7 +185,7 @@ jobs:
         id: image
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
-      - name: Build Docker image
+      - name: Build and save Docker image
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -150,18 +198,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          container=""
-          cleanup() {
-            if [ -n "$container" ]; then
-              docker rm -f "$container" >/dev/null 2>&1 || true
-            fi
-          }
-          trap cleanup EXIT
-
           container=$(docker run --rm -d \
             -p 127.0.0.1:5001:5000 \
             -e DATABASE_URL=sqlite:////tmp/flashcard.db \
             ${{ steps.image.outputs.name }}:${{ github.sha }})
+
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
 
           for i in {1..20}; do
             if curl -fsS http://127.0.0.1:5001/health; then
@@ -172,6 +214,16 @@ jobs:
 
           docker logs "$container"
           exit 1
+
+      - name: Save image for deploy job
+        run: docker save -o /tmp/flashcard-api.tar ${{ steps.image.outputs.name }}:${{ github.sha }}
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/flashcard-api.tar
+          retention-days: 1
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
@@ -188,3 +240,85 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.image.outputs.name }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build]
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: flashcard-ci
+
+      - name: Load image into kind
+        run: |
+          IMAGE_ID=ghcr.io/${GITHUB_REPOSITORY,,}:${{ github.sha }}
+          docker load -i /tmp/flashcard-api.tar
+          docker tag "$IMAGE_ID" flashcard-api:dev
+          kind load docker-image flashcard-api:dev --name flashcard-ci
+
+      - name: Create infrastructure namespace and PostgreSQL
+        run: |
+          kubectl create namespace infrastructure --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f k8s/ci/postgres.yaml
+          kubectl wait --for=condition=Ready pod/postgres -n infrastructure --timeout=60s
+
+      - name: Create flashcard namespace, secret, and configmap
+        run: |
+          kubectl create namespace flashcard --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create secret generic flashcard-api-secret \
+            --namespace flashcard \
+            --from-literal=DATABASE_URL='postgresql+psycopg://flashcard:flashcard@postgres-postgresql.infrastructure:5432/flashcard' \
+            --from-literal=SECRET_KEY=ci-smoke-test-secret-key \
+            --from-literal=JWT_SECRET=ci-smoke-test-jwt-secret-at-least-32-bytes \
+            --from-literal=S3_BUCKET_NAME=flashcard-exports \
+            --from-literal=S3_REGION=us-east-1 \
+            --from-literal=AWS_ACCESS_KEY_ID=test \
+            --from-literal=AWS_SECRET_ACCESS_KEY=test \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl apply -f k8s/apps/flashcard/configmap.yaml -n flashcard
+
+      - name: Deploy flashcard-api
+        run: |
+          kubectl apply -f k8s/apps/flashcard/deployment.yaml -n flashcard
+          kubectl apply -f k8s/apps/flashcard/service.yaml -n flashcard
+          kubectl rollout status deployment/flashcard-api -n flashcard --timeout=60s
+
+      - name: Run smoke test
+        run: |
+          chmod +x scripts/kubernetes-smoke-test.sh
+          kubectl port-forward svc/flashcard-api 15000:5000 -n flashcard &>/dev/null &
+          PF_PID=$!
+          sleep 2
+          K8S_SMOKE_SKIP_ARGO=1 K8S_SMOKE_URL=http://127.0.0.1:15000 \
+            ./scripts/kubernetes-smoke-test.sh || (
+              kill $PF_PID 2>/dev/null || true
+              exit 1
+            )
+          kill $PF_PID 2>/dev/null || true
+
+      - name: Debug on failure
+        if: failure()
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods -A
+          echo "=== flashcard-api logs ==="
+          kubectl logs deployment/flashcard-api -n flashcard || true
+          echo "=== postgres logs ==="
+          kubectl logs postgres -n infrastructure || true
+          echo "=== Events ==="
+          kubectl get events -A --sort-by='.lastTimestamp' || true

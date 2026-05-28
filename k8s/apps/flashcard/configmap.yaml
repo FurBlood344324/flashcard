@@ -4,3 +4,5 @@ metadata:
   name: flashcard-api-config
 data:
   FLASK_ENV: production
+  S3_ENDPOINT_URL: http://localstack.infrastructure:4566
+  S3_EXPORT_PREFIX: exports

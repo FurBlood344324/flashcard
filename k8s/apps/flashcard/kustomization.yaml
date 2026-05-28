@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: flashcard
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml
+  - configmap.yaml
+  - servicemonitor.yaml
+  - secrets/flashcard-api-secret.yaml
