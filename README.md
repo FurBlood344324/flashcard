@@ -99,6 +99,16 @@ Postman içinde şu iki dosyayı import edebilirsin:
 
 Collection içindeki istekler sırasıyla çalıştırıldığında `deck_id` ve `flashcard_id` environment değişkenleri otomatik set edilir.
 
+Koleksiyonu Newman ile lokal olarak da otomatik koşturabilirsin:
+
+```bash
+uv run flask --app app init-db
+uv run flask --app app run --debug
+newman run postman/flashcard-api.postman_collection.json -e postman/flashcard-local.postman_environment.json --bail
+```
+
+CI içinde de aynı collection aynı environment dosyasıyla Newman üzerinden çalıştırılır; isteklerden biri ya da içindeki testlerden biri başarısız olursa workflow fail olur.
+
 ## Kubernetes / Minikube
 
 ### Ön koşullar
