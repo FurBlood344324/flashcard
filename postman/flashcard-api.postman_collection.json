@@ -178,6 +178,15 @@
       "name": "Create Deck",
       "event": [
         {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.environment.set('deck_name', 'Postman Deck ' + Date.now());"
+            ]
+          }
+        },
+        {
           "listen": "test",
           "script": {
             "type": "text/javascript",
@@ -211,6 +220,10 @@
               "  pm.expect(tv4.validate(pm.response.json(), schema)).to.be.true;",
               "});",
               "",
+              "pm.test('deck name matches generated value', function () {",
+              "  pm.expect(pm.response.json().data.name).to.eql(pm.environment.get('deck_name'));",
+              "});",
+              "",
               "pm.environment.set('deck_id', pm.response.json().data.id);"
             ]
           }
@@ -223,7 +236,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"Postman Deck {{$timestamp}}\",\n  \"description\": \"Postman ile olusturulan deck\"\n}"
+          "raw": "{\n  \"name\": \"{{deck_name}}\",\n  \"description\": \"Postman ile olusturulan deck\"\n}"
         },
         "url": "{{base_url}}/api/decks"
       }
@@ -253,6 +266,12 @@
               "};",
               "pm.test('schema valid', function () {",
               "  pm.expect(tv4.validate(pm.response.json(), schema)).to.be.true;",
+              "});",
+              "",
+              "pm.test('created deck appears in deck list', function () {",
+              "  let deckName = pm.environment.get('deck_name');",
+              "  let names = pm.response.json().data.map(function (deck) { return deck.name; });",
+              "  pm.expect(names).to.include(deckName);",
               "});"
             ]
           }
@@ -298,6 +317,10 @@
               "};",
               "pm.test('schema valid', function () {",
               "  pm.expect(tv4.validate(pm.response.json(), schema)).to.be.true;",
+              "});",
+              "",
+              "pm.test('deck detail matches stored deck id', function () {",
+              "  pm.expect(pm.response.json().data.id).to.eql(Number(pm.environment.get('deck_id')));",
               "});"
             ]
           }
@@ -311,6 +334,16 @@
     {
       "name": "Create Flashcard",
       "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.environment.set('flashcard_front', 'Flask nedir? ' + Date.now());",
+              "pm.environment.set('flashcard_back', 'Python web framework');"
+            ]
+          }
+        },
         {
           "listen": "test",
           "script": {
@@ -347,6 +380,14 @@
               "  pm.expect(tv4.validate(pm.response.json(), schema)).to.be.true;",
               "});",
               "",
+              "pm.test('flashcard starts as new', function () {",
+              "  let data = pm.response.json().data;",
+              "  pm.expect(data.front).to.eql(pm.environment.get('flashcard_front'));",
+              "  pm.expect(data.back).to.eql(pm.environment.get('flashcard_back'));",
+              "  pm.expect(data.difficulty).to.eql('new');",
+              "  pm.expect(data.review_count).to.eql(0);",
+              "});",
+              "",
               "pm.environment.set('flashcard_id', pm.response.json().data.id);"
             ]
           }
@@ -359,7 +400,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"front\": \"Flask nedir?\",\n  \"back\": \"Python web framework\"\n}"
+          "raw": "{\n  \"front\": \"{{flashcard_front}}\",\n  \"back\": \"{{flashcard_back}}\"\n}"
         },
         "url": "{{base_url}}/api/decks/{{deck_id}}/flashcards"
       }
@@ -401,6 +442,13 @@
               "};",
               "pm.test('schema valid', function () {",
               "  pm.expect(tv4.validate(pm.response.json(), schema)).to.be.true;",
+              "});",
+              "",
+              "pm.test('review updates flashcard state', function () {",
+              "  let data = pm.response.json().data;",
+              "  pm.expect(data.difficulty).to.eql('good');",
+              "  pm.expect(data.review_count).to.eql(1);",
+              "  pm.expect(data.next_review_at).to.not.eql(null);",
               "});"
             ]
           }
@@ -449,6 +497,10 @@
               "};",
               "pm.test('schema valid', function () {",
               "  pm.expect(tv4.validate(pm.response.json(), schema)).to.be.true;",
+              "});",
+              "",
+              "pm.test('flashcard marked deleted', function () {",
+              "  pm.expect(pm.response.json().data.deleted).to.eql(true);",
               "});"
             ]
           }
